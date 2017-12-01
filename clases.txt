@@ -1,0 +1,109 @@
+import datetime
+import json
+
+
+valor_minimo = 100
+tiempo_de_retiro = 120
+
+class Acc(object):
+	def __init__(self, id, type, balance=0.0):
+		self.balance = balance + 0.0
+		self.id = id
+		self.ultimo_retiro = datetime.datetime.now()
+		self.type = type
+
+	def retirar(self, cantidad):
+
+		if self.balance - cantidad > valor_minimo:
+
+			self.balance = self.balance - cantidad
+
+			self.ultimo_retiro = datetime.datetime.now()
+
+			return self.balance
+
+		else:
+			return 0
+
+
+	def depositar(self, cantidad):
+		self.balance = self.balance + cantidad
+		return self.balance
+
+	def tiempoDeRetiro(self):
+		delta = datetime.datetime.now() - self.ultimo_retiro
+
+		if delta.total_seconds() > tiempo_de_retiro:
+			return 0
+
+		else:
+			return tiempo_de_retiro - delta.total_seconds();
+
+	def reprJSON(self):
+		return dict(balance=self.balance, id=self.id, type=self.type)
+
+class User(object):
+	def __init__(self, DNI, nombre="[!] No hay nombre", nick="[!] No hay nick"):
+		self.nombre = nombre
+		self.nick = nick
+		self.DNI = DNI
+
+		self.usdcuenta = None
+		self.solesacc = None
+
+	def reprJSON(self):
+		return dict(DNI=self.DNI, nombre=self.nombre, nick=self.nick, usdacc=self.usdcuenta, solesacc=self.usdcuenta)
+
+class Database(object):
+
+	def __init__(self):
+		self.users = {}
+		self.accounts = {}
+
+
+	def guardarUsuario(self, User):
+		if User.DNI in self.users:
+			return False, "[Error] usuario ya existe en la base de datos"
+		else:
+			self.users[User.DNI] = User
+			return True, "[Ok] echo"
+
+	def usuarioPorDNI(self, DNI):
+		if DNI in self.users:
+			return self.users[DNI]
+		else:
+			return None
+
+	def guardarCuenta(self, User, acc):
+
+
+		if(acc.id in self.accounts):
+			return False, "[Error] usuario ya existe en la base de datos"
+
+		if acc.type == 'usd':
+			User.usdacc = acc
+		elif acc.type == 'soles':
+			User.solesacc = acc
+		else: return False, "[Error] tipo de cuenta no es valido"
+
+		self.accounts[acc.id] = acc
+		return True, "[Ok] echo"
+
+
+	def obtenerCuentaPorID(self, ID):
+		if ID in self.accounts:
+			return self.accounts[ID]
+		else:
+			return None
+
+	def reprJSON(self):
+		return {'users' : self.users}
+
+class codificadorDeBaseDeDatos(json.JSONEncoder):
+	def default(self, obj):
+		if hasattr(obj,'reprJSON'):
+			return obj.reprJSON()
+		else:
+			return json.JSONEncoder.default(self, obj)
+
+

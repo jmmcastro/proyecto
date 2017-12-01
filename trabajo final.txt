@@ -1,0 +1,284 @@
+from random import randint
+import json
+
+from clases import *
+
+ret_max = 1000
+nombre_archivo = "bank.json"
+
+def crearUsuario(DB):
+
+	DNI = int(input("Escriba su DNI: "))
+	nick = input("Escriba su nick:  ")
+	nombre = input("Escriba su nombre: ")
+
+	success, msg = DB.guardarUsuario(User(DNI, nick=nick, nombre=nombre))
+
+	print(msg)
+
+def crearCuenta(DB):
+	print("El efectivo en:")
+	print("[1] USD")
+	print("[2] Soles")
+
+	opt = int(input())
+
+	if opt == 1 or opt == 2:
+		if opt == 1:
+			type = "usd"
+		else:
+			type = "soles"
+
+		id = input("Escriba su id(con enter se creara un numero aleatorio): ")
+
+		if(id == ''):
+			id = randint(0,ret_max)
+		else:
+			id = int(id)
+
+		acc = Acc(id, type)
+
+		DNI = int(input("Escriba el DNI del usuario: "))
+
+		user = DB.usuarioPorDNI(DNI)
+
+		if(user == None):
+			print("[Error] Usuario con este DNI no existe.")
+		else:
+
+			if(type == "usd"):
+
+				if user.usdcuenta == None:
+
+					DB.guardarCuenta(user, acc)
+					print("[Ok] Cuenta con el id", id, "creada")
+				else:
+					print("[Error] Cuenta en USD existe para el DNI", DNI)
+
+			else:
+				if user.solesacc == None:
+
+					DB.guardarCuenta(user, acc)
+					print("[Ok] Cuenta con el id", id, "creada")
+				else:
+					print("[Error] Cuenta en soles existe para el DNI", DNI)
+
+	else:
+		print("[Error] Typeo invalido.")
+
+
+def mostrarUsuario(DB):
+
+	DNI = int(input("Escriba su DNI: "))
+
+	user = DB.usuarioPorDNI(DNI)
+
+	if(user != None):
+		print("")
+		print("///////////////////////////////////")
+		print("Muestra la informacion del DNI:\t", DNI)
+		print("Nombre:\t", user.name)
+		print("Nick:\t", user.nick)
+
+		if user.usdacc != None:
+			print("ID [", user.usdcuenta.id, "] Balance de USD:\t", user.usdcuenta.balance)
+		else:
+			print("Balance de USD:\t", "-")
+
+		if user.solesacc != None:
+			print("ID [", user.solesacc.id, "] Balance en soles:\t", user.solesacc.balance)
+		else:
+			print("Balance en soles:\t", "-")
+		print("///////////////////////////////////")
+		print("")
+
+	else:
+		print("[info] No se encontro usuario con ese DNI")
+
+def depositarFondos(DB):
+
+	acc = int(input("Escriba su numero de cuenta: "))
+
+	acc = DB.obtenerCuentaPorID(acc)
+
+
+	if acc == None:
+		print("[Error] No se encontro cuenta con ese id.")
+
+
+	else:
+		howmuch = int(input("¿Cuanto?"))
+
+		if howmuch > 0:
+			print("[Ok]Ahora tienes", acc.depositar(howmuch), "en su cuenta", acc.id, ".")
+		else:
+			print("[Error] Monto invalido.")
+
+def retirarFondos(DB):
+
+	acc = int(input("Escriba el numero de su cuenta: "))
+
+	acc = DB.obtenerCuentaPorID(acc)
+
+	if acc == None:
+		print("[Error] Ninguna cuenta se encontro con ese id.")
+		return
+
+
+	if(acc.tiempoDeRetiro() != 0):
+		print("[Error] Necesita esperar",acc.tiempoDeRetiro(), "mas segundo para hacer esta accion.")
+		return
+
+
+	monto = int(input("Escriba el numero de dinero que desea retirar: "))
+
+
+	done = acc.retirar(monto)
+
+	if(done == 0):
+		print("[Error] Balance de la cuenta de", acc.balance, "insuficiente.")
+	else:
+		print("[Ok] Nuevo balance es", done)
+
+def transferirFondos(DB):
+
+	accfrom = int(input("Escriba el id de la cuenta donde quiera retirar fondos: "))
+	accto = int(input("Escriba el id de la cuenta donde quiera recibir fondos: "))
+
+
+	accfrom = DB.obtenerCuentaPorID(accfrom)
+	accto = DB.obtenerCuentaPorID(accto)
+
+
+	if(accfrom == None):
+		print("[Error] Cuenta invalida.")
+		return
+
+	if(accto == None):
+		print("[Error] Cuenta invalida.")
+		return
+
+
+	if(accto.type != accfrom.type):
+		print("[Error] Tipos de cuenta no coinciden.")
+		return
+
+
+	monto = int(input("Escriba cuanto dinero desea retirar: "))
+
+
+	done = accfrom.retirar(monto)
+
+
+	if(done == 0):
+		print("[Error] El balance de la cuenta de", accfrom.balance, "insuficiente.")
+		return
+
+
+	accto.depositar(done)
+
+	print("[Ok] Nuevo balance es de", accto.balance, ". Se han transferido:", done)
+
+
+def salir(DB):
+	guardarAarchivo(DB)
+
+def guardarAarchivo(DB):
+
+	try:
+		with open(nombre_archivo, 'w') as outfile:
+			json.dump(DB.reprJSON(), outfile, cls=codificadorDeBaseDeDatos)
+	except Exception:
+		pass
+
+def cargarAarchivo(DB):
+	try:
+		with open(nombre_archivo, 'r') as infile:
+
+			data = json.load(infile)
+
+			if(data['users'] != {}):
+				for key in data['users']:
+
+					loadeduser = data['users'][key]
+
+					DNI = int(loadeduser['DNI'])
+
+					nombre = loadeduser['nombre']
+
+					nick = loadeduser['nick']
+
+					DB.guardarUsuario(User(DNI, nombre=nombre, nick=nick))
+
+					user = DB.usuarioPorDNI(DNI)
+
+					if(loadeduser['usdcuenta'] != None):
+						acc = loadeduser['usdcuenta']
+						DB.guardarCuenta(user, Acc(int(acc['id']), acc['type'], balance=acc['balance'] ))
+
+					if(loadeduser['solesacc'] != None):
+						acc = loadeduser['solesacc']
+						DB.guardarCuenta(user, Acc(int(acc['id']), acc['type'], balance=acc['balance'] ))
+
+	except IOError:
+		print("Archivo", nombre_archivo, "no encontrado. Comenzando desde cero")
+
+def listAccs(DB):
+	print("")
+	print("///////////////////////////////////")
+
+	for key in DB.accounts:
+		print("ID [", key, "]\t", DB.accounts[key].balance, "\t", DB.accounts[key].type);
+
+	print("///////////////////////////////////")
+	print("")
+
+def main():
+
+	opt = 999
+
+	DB = Database()
+
+	cargarAarchivo(DB)
+
+	while opt != 0:
+		print("========= Menu del “Banco UTEC Corp SA”  =========")
+		print("[1] - Crear usuario")
+		print("[2] - Crear cuenta")
+		print("[3] - Mostrar la informancion del usuario")
+		print("[4] - Depositar fondos")
+		print("[5] - Retirar fondos")
+		print("[6] - Transferir fondos")
+		print("[7] - Lista de cuentas")
+		print("[0] - Salir!")
+
+		opt = input("> ")
+
+		opt = int(opt)
+
+		if(opt == 1):
+			crearUsuario(DB)
+		elif(opt == 2):
+			crearCuenta(DB)
+		elif(opt == 3):
+			mostrarUsuario(DB)
+		elif(opt == 4):
+			depositarFondos(DB)
+		elif(opt == 5):
+			retirarFondos(DB)
+		elif(opt == 6):
+			transferirFondos(DB)
+		elif(opt == 7):
+			listAccs(DB)
+		elif(opt == 88):
+			cargarAarchivo(DB)
+		elif(opt == 99):
+			guardarAarchivo(DB)
+		elif(opt == 0):
+			salir(DB)
+		else:
+			print("Opcion invalida, escribir de nuevo.")
+
+
+if __name__ == '__main__':
+	main()
